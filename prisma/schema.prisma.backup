@@ -1,0 +1,569 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// EXISTING MODELS - UPDATED
+// ============================================================================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  aiaNumber String?  @unique @map("aia_number")
+  role      String?  // "platform_admin", "organization_admin", "rep", "student"
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Existing Relations
+  coursesPresented Course[]         @relation("CoursePresenter")
+  enrollments      Enrollment[]
+  quizAttempts     QuizAttempt[]
+  certificates     Certificate[]
+  completionLogs   CompletionLog[]
+  accounts         Account[]
+  sessions         Session[]
+
+  // New Relations
+  organizationMemberships OrganizationMember[]
+  uploadedBatches        BulkCertificateBatch[]
+
+  @@map("users")
+}
+
+model Course {
+  id               String   @id @default(uuid())
+  presenterId      String   @map("presenter_id")
+  organizationId   String?  @map("organization_id")
+  title            String
+  description      String   @db.Text
+  aiaCourseNumber  String   @map("aia_course_number")
+  sessionNumber   String   @map("session_number")
+  location         String
+  learningUnits    Int      @map("learning_units")
+  learningUnitsType String  @map("learning_units_type")
+  speakerName      String   @map("speaker_name")
+  speakerTitle     String   @map("speaker_title")
+  courseType       String   @map("course_type")
+  providerName     String   @map("provider_name")
+  providerContactName String @map("provider_contact_name")
+  providerAddress  String   @map("provider_address")
+  providerCity     String   @map("provider_city")
+  providerState    String   @map("provider_state")
+  providerZip      String   @map("provider_zip")
+  providerPhone    String   @map("provider_phone")
+  providerEmail    String   @map("provider_email")
+  providerNumber   String   @map("provider_number")
+  providerLogoUrl  String?  @map("provider_logo_url")
+  pdfUrl           String   @map("pdf_url")
+  // New fields for video integration and hosting
+  videoProvider            String?  @map("video_provider") // "youtube", "vimeo", "wistia", "custom", "hosted"
+  requireVideoCompletion   Boolean  @default(false) @map("require_video_completion")
+  isHosted                 Boolean  @default(false) @map("is_hosted") // Self-paced hosting enabled
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Existing Relations
+  presenter   User          @relation("CoursePresenter", fields: [presenterId], references: [id])
+  slides      Slide[]
+  enrollments Enrollment[]
+  questions   Question[]
+  quizAttempts QuizAttempt[]
+  certificates Certificate[]
+  completionLogs CompletionLog[]
+
+  // New Relations
+  organization   Organization?      @relation(fields: [organizationId], references: [id])
+  subscription   CourseSubscription?
+  batches        BulkCertificateBatch[]
+  numberSequence CertificateNumberSequence?
+
+  @@index([presenterId])
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("courses")
+}
+
+model Slide {
+  id         String   @id @default(uuid())
+  courseId   String   @map("course_id")
+  slideNumber Int     @map("slide_number")
+  imageUrl   String   @map("image_url")
+  videoUrl   String?  @map("video_url")
+  // New fields for external video integration
+  videoProvider       String?  @map("video_provider") // "youtube", "vimeo", "wistia", "custom", "hosted"
+  videoEmbedUrl       String?  @db.Text @map("video_embed_url")
+  videoExternalId     String?  @map("video_external_id")
+  videoProgressTracking Boolean @default(false) @map("video_progress_tracking")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, slideNumber])
+  @@index([courseId])
+  @@index([slideNumber])
+  @@map("slides")
+}
+
+model Enrollment {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  courseId     String    @map("course_id")
+  enrolledAt   DateTime  @default(now()) @map("enrolled_at")
+  completedAt  DateTime? @map("completed_at")
+  progressSlide Int      @default(0) @map("progress_slide")
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id])
+  course       Course        @relation(fields: [courseId], references: [id])
+  quizAttempts QuizAttempt[]
+  certificates Certificate[]
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+model Question {
+  id            String   @id @default(uuid())
+  courseId      String   @map("course_id")
+  questionNumber Int     @map("question_number")
+  questionText  String   @db.Text @map("question_text")
+  optionA       String   @map("option_a")
+  optionB       String   @map("option_b")
+  optionC       String   @map("option_c")
+  optionD       String   @map("option_d")
+  correctAnswer String   @map("correct_answer") // A, B, C, or D
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, questionNumber])
+  @@index([courseId])
+  @@index([questionNumber])
+  @@map("questions")
+}
+
+model QuizAttempt {
+  id            String   @id @default(uuid())
+  enrollmentId  String   @map("enrollment_id")
+  courseId      String   @map("course_id")
+  userId        String   @map("user_id")
+  attemptNumber Int      @map("attempt_number")
+  score         Float
+  answers       Json     // Array of { question_id, answer_selected, is_correct }
+  passed        Boolean
+  attemptedAt   DateTime @default(now()) @map("attempted_at")
+  completedAt   DateTime @default(now()) @map("completed_at")
+
+  // Relations
+  enrollment Enrollment  @relation(fields: [enrollmentId], references: [id])
+  course     Course      @relation(fields: [courseId], references: [id])
+  user       User        @relation(fields: [userId], references: [id])
+  certificate Certificate?
+
+  @@index([enrollmentId])
+  @@index([userId])
+  @@index([courseId])
+  @@index([passed])
+  @@map("quiz_attempts")
+}
+
+model Certificate {
+  id                  String    @id @default(uuid())
+  quizAttemptId       String?   @unique @map("quiz_attempt_id") // Now optional for bulk certificates
+  bulkCertificateId   String?   @unique @map("bulk_certificate_id") // Link to bulk cert
+  enrollmentId        String    @map("enrollment_id")
+  userId              String    @map("user_id")
+  courseId            String    @map("course_id")
+  certificateNumber   String?   @map("certificate_number") // Trackable number
+  certificateUrl      String    @map("certificate_url")
+  generatedAt         DateTime  @default(now()) @map("generated_at")
+  emailedToAttendeeAt DateTime? @map("emailed_to_attendee_at")
+  emailedToPresenterAt DateTime? @map("emailed_to_presenter_at")
+
+  // Relations
+  quizAttempt     QuizAttempt?     @relation(fields: [quizAttemptId], references: [id])
+  bulkCertificate BulkCertificate? @relation(fields: [bulkCertificateId], references: [id])
+  enrollment      Enrollment       @relation(fields: [enrollmentId], references: [id])
+  user            User             @relation(fields: [userId], references: [id])
+  course          Course           @relation(fields: [courseId], references: [id])
+  completionLog   CompletionLog?
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([certificateNumber])
+  @@index([generatedAt])
+  @@map("certificates")
+}
+
+model CompletionLog {
+  id                  String    @id @default(uuid())
+  courseId            String    @map("course_id")
+  userId              String    @map("user_id")
+  userName            String    @map("user_name")
+  userEmail           String    @map("user_email")
+  userAiaNumber       String?   @map("user_aia_number")
+  quizScore           Float     @map("quiz_score")
+  completionDate      DateTime  @default(now()) @map("completion_date")
+  certificateId       String    @unique @map("certificate_id")
+  presenterEmailSentAt DateTime? @map("presenter_email_sent_at")
+  // New fields for self-paced course notifications
+  organizationNotifiedAt DateTime? @map("organization_notified_at")
+  repNotifiedAt         DateTime?  @map("rep_notified_at")
+
+  // Relations
+  course     Course      @relation(fields: [courseId], references: [id])
+  user       User        @relation(fields: [userId], references: [id])
+  certificate Certificate @relation(fields: [certificateId], references: [id])
+
+  @@index([courseId])
+  @@index([completionDate])
+  @@map("completion_log")
+}
+
+// ============================================================================
+// NEW MODELS - ORGANIZATION SYSTEM
+// ============================================================================
+
+model Organization {
+  id                String   @id @default(uuid())
+  name              String
+  type              String   // "manufacturer", "rep_firm", "individual_rep"
+  parentId          String?  @map("parent_id") // For rep firms under manufacturers
+  email             String
+  phone             String?
+  address           String?
+  city              String?
+  state             String?
+  zip               String?
+  aiaProviderNumber String?  @map("aia_provider_number")
+  stripeCustomerId  String?  @unique @map("stripe_customer_id")
+  // White-labeling fields
+  customDomain      String?  @unique @map("custom_domain")
+  primaryColor      String?  @map("primary_color")
+  secondaryColor    String?  @map("secondary_color")
+  logoUrl           String?  @map("logo_url")
+  customCss         String?  @db.Text @map("custom_css")
+  whiteLabelEnabled Boolean  @default(false) @map("white_label_enabled")
+  removeBranding    Boolean  @default(false) @map("remove_branding")
+  // API access fields
+  apiKey            String?  @unique @map("api_key")
+  apiEnabled        Boolean  @default(false) @map("api_enabled")
+  webhookUrl        String?  @map("webhook_url")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  parent            Organization?  @relation("OrganizationHierarchy", fields: [parentId], references: [id])
+  children          Organization[]  @relation("OrganizationHierarchy")
+  members           OrganizationMember[]
+  invitations       Invitation[]
+  templates         CertificateTemplate[]
+  courses           Course[]
+  batches           BulkCertificateBatch[]
+  subscriptions     CourseSubscription[]
+  paymentMethods    PaymentMethod[]
+  invoices          Invoice[]
+  contacts          Contact[]
+  numberSequences   CertificateNumberSequence[]
+
+  @@index([parentId])
+  @@index([type])
+  @@index([customDomain])
+  @@index([apiKey])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  userId         String   @map("user_id")
+  role           String   // "admin", "rep", "viewer"
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+model Invitation {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  email          String
+  role           String
+  token          String   @unique
+  invitedBy      String   @map("invited_by") // userId
+  acceptedAt     DateTime? @map("accepted_at")
+  expiresAt      DateTime @map("expires_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([token])
+  @@index([email])
+  @@map("invitations")
+}
+
+// ============================================================================
+// NEW MODELS - CERTIFICATE TEMPLATES
+// ============================================================================
+
+model CertificateTemplate {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  accreditationType String @map("accreditation_type") // "AIA", "OSHA", etc.
+  isDefault      Boolean  @default(false) @map("is_default")
+  htmlTemplate   String   @db.Text @map("html_template")
+  cssStyles      String?  @db.Text @map("css_styles")
+  logoUrl        String?  @map("logo_url")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  batches        BulkCertificateBatch[]
+
+  @@index([organizationId])
+  @@index([accreditationType])
+  @@map("certificate_templates")
+}
+
+// ============================================================================
+// NEW MODELS - BULK CERTIFICATE SYSTEM
+// ============================================================================
+
+model BulkCertificateBatch {
+  id                String   @id @default(uuid())
+  organizationId    String   @map("organization_id")
+  uploadedById      String   @map("uploaded_by_id") // User who uploaded
+  templateId        String   @map("template_id")
+  courseId          String?  @map("course_id") // Optional - for course-specific batches
+  fileName          String   @map("file_name")
+  totalRows         Int      @map("total_rows")
+  successfulRows    Int      @default(0) @map("successful_rows")
+  failedRows        Int      @default(0) @map("failed_rows")
+  status            String   // "processing", "completed", "failed"
+  errorLog          String?  @db.Text @map("error_log")
+  createdAt         DateTime @default(now()) @map("created_at")
+  completedAt       DateTime? @map("completed_at")
+
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  uploadedBy        User         @relation(fields: [uploadedById], references: [id])
+  template          CertificateTemplate @relation(fields: [templateId], references: [id])
+  course            Course?            @relation(fields: [courseId], references: [id])
+  certificates      BulkCertificate[]
+
+  @@index([organizationId])
+  @@index([uploadedById])
+  @@index([status])
+  @@map("bulk_certificate_batches")
+}
+
+model BulkCertificate {
+  id                  String   @id @default(uuid())
+  batchId             String   @map("batch_id")
+  certificateNumber   String   @unique @map("certificate_number") // Format: CERT-Course#-Date-00001
+  attendeeName        String   @map("attendee_name")
+  attendeeEmail       String   @map("attendee_email")
+  attendeeAiaNumber   String?  @map("attendee_aia_number")
+  attendeeLocation    String?  @map("attendee_location")
+  courseTitle          String   @map("course_title")
+  courseNumber         String   @map("course_number")
+  sessionNumber        String   @map("session_number")
+  presentationDate     DateTime @map("presentation_date")
+  presentationLocation String  @map("presentation_location")
+  repName              String   @map("rep_name")
+  repEmail             String   @map("rep_email")
+  certificateUrl       String   @map("certificate_url")
+  emailedToAttendeeAt  DateTime? @map("emailed_to_attendee_at")
+  emailedToRepAt       DateTime? @map("emailed_to_rep_at")
+  generatedAt          DateTime @default(now()) @map("generated_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  // Allow manual updates/regeneration
+  lastRegeneratedAt    DateTime? @map("last_regenerated_at")
+  regenerationReason   String?  @db.Text @map("regeneration_reason")
+
+  batch                BulkCertificateBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  contact              Contact?
+  certificate          Certificate?
+
+  @@index([batchId])
+  @@index([certificateNumber])
+  @@index([attendeeEmail])
+  @@index([repEmail])
+  @@map("bulk_certificates")
+}
+
+// ============================================================================
+// NEW MODELS - CONTACT/MARKETING DATABASE
+// ============================================================================
+
+model Contact {
+  id              String   @id @default(uuid())
+  email           String
+  name            String
+  location        String?
+  aiaNumber       String?  @map("aia_number")
+  optOut          Boolean  @default(false) @map("opt_out")
+  sourceBatchId   String?  @map("source_batch_id") // Which batch created this contact
+  sourceCertificateId String? @unique @map("source_certificate_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  certificate     BulkCertificate? @relation(fields: [sourceCertificateId], references: [id])
+
+  @@unique([email])
+  @@index([email])
+  @@index([optOut])
+  @@index([sourceBatchId])
+  @@map("contacts")
+}
+
+// ============================================================================
+// NEW MODELS - BILLING SYSTEM
+// ============================================================================
+
+model CourseSubscription {
+  id                String   @id @default(uuid())
+  organizationId    String   @map("organization_id")
+  courseId          String   @map("course_id")
+  monthlyFee        Float    @map("monthly_fee") // In dollars
+  status            String   // "active", "cancelled", "past_due"
+  currentPeriodStart DateTime @map("current_period_start")
+  currentPeriodEnd   DateTime @map("current_period_end")
+  stripeSubscriptionId String? @unique @map("stripe_subscription_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  course            Course       @relation(fields: [courseId], references: [id])
+
+  @@unique([organizationId, courseId])
+  @@index([organizationId])
+  @@index([courseId])
+  @@index([status])
+  @@map("course_subscriptions")
+}
+
+model PaymentMethod {
+  id                String   @id @default(uuid())
+  organizationId    String   @map("organization_id")
+  stripePaymentMethodId String @unique @map("stripe_payment_method_id")
+  type              String   // "card"
+  last4             String   @map("last_4")
+  brand             String?  // "visa", "mastercard", etc.
+  expMonth          Int?     @map("exp_month")
+  expYear           Int?     @map("exp_year")
+  isDefault         Boolean  @default(false) @map("is_default")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("payment_methods")
+}
+
+model Invoice {
+  id                String   @id @default(uuid())
+  organizationId    String   @map("organization_id")
+  invoiceNumber     String   @unique @map("invoice_number")
+  type              String   // "certificate_batch", "subscription", "monthly_hosting"
+  amount            Float
+  description       String?  @db.Text
+  stripeInvoiceId   String?  @unique @map("stripe_invoice_id")
+  status            String   // "draft", "open", "paid", "void", "uncollectible"
+  dueDate           DateTime? @map("due_date")
+  paidAt            DateTime? @map("paid_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  organization      Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([invoiceNumber])
+  @@map("invoices")
+}
+
+// ============================================================================
+// NEW MODELS - CERTIFICATE NUMBERING
+// ============================================================================
+
+model CertificateNumberSequence {
+  id             String   @id @default(uuid())
+  organizationId String?  @map("organization_id") // Optional - can be per org or per course
+  courseId       String?  @map("course_id")
+  prefix         String   // "CERT"
+  lastNumber     Int      @default(0) @map("last_number")
+  format         String   // "CERT-{course}-{date}-{number}"
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  course         Course?      @relation(fields: [courseId], references: [id])
+
+  @@unique([organizationId, courseId])
+  @@index([organizationId])
+  @@index([courseId])
+  @@map("certificate_number_sequences")
+}
+
+// ============================================================================
+// NextAuth required models
+// ============================================================================
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
