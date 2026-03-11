@@ -103,8 +103,21 @@ The project is configured for deployment on Vercel:
 
 1. Push your code to GitHub
 2. Import the project in Vercel
-3. Add all environment variables in Vercel dashboard
+3. Add environment variables in Vercel (Project Settings → Environment Variables)
 4. Deploy!
+
+### Required Vercel Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string (Supabase, Neon, etc.) |
+| `NEXTAUTH_SECRET` | Yes | Generate with `openssl rand -base64 32` |
+| `NEXTAUTH_URL` | Yes | Your Vercel URL, e.g. `https://your-app.vercel.app` |
+| `RESEND_API_KEY` | Yes | For magic links and certificate emails |
+| `RESEND_FROM_EMAIL` | Yes | Verified sender, e.g. `noreply@yourdomain.com` |
+| `BLOB_READ_WRITE_TOKEN` | Yes | From Vercel Blob storage |
+
+After adding variables, redeploy. Run `npx prisma migrate deploy` against your production DB before first use.
 
 ## License
 
