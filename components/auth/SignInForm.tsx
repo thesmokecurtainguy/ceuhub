@@ -32,6 +32,28 @@ export function SignInForm() {
     }
   }
 
+  const handleDevLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setMessage('')
+
+    try {
+      const result = await signIn('credentials', {
+        email,
+        redirect: true,
+        callbackUrl: '/dashboard',
+      })
+
+      if (result?.error) {
+        setMessage('Failed to sign in. Please try again.')
+        setIsLoading(false)
+      }
+    } catch (error) {
+      setMessage('An error occurred. Please try again.')
+      setIsLoading(false)
+    }
+  }
+
   const handleOAuthSignIn = async (provider: string) => {
     setIsLoading(true)
     try {
@@ -42,9 +64,60 @@ export function SignInForm() {
     }
   }
 
+  const isDev = process.env.NODE_ENV !== 'production'
+
   return (
     <div className="max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-md">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Sign In to ceuHUB</h2>
+
+      {isDev && (
+        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+          <p className="text-sm text-yellow-800 font-medium mb-2">🧪 Dev Mode</p>
+          <p className="text-sm text-yellow-700">
+            Use Dev Login for instant sign-in without email verification.
+          </p>
+        </div>
+      )}
+
+      {isDev && (
+        <form onSubmit={handleDevLogin} className="space-y-4 mb-6">
+          <div>
+            <label htmlFor="dev-email" className="block text-sm font-medium text-gray-700 mb-2">
+              Email Address (Dev Login)
+            </label>
+            <input
+              id="dev-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="test@example.com"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Signing in...' : 'Dev Login (Instant)'}
+          </button>
+        </form>
+      )}
+
+      {isDev && (
+        <div className="mb-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">Or use email magic link</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleEmailSignIn} className="space-y-4">
         <div>
@@ -114,5 +187,3 @@ export function SignInForm() {
     </div>
   )
 }
-
-

@@ -2,9 +2,27 @@
 
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
+import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 export function Header() {
   const { data: session } = useSession()
+  const pathname = usePathname()
+  const [userContext, setUserContext] = useState<any>(null)
+
+  useEffect(() => {
+    if (session) {
+      fetch('/api/users/context')
+        .then(res => res.json())
+        .then(data => setUserContext(data))
+        .catch(() => setUserContext({ isStudent: true }))
+    }
+  }, [session])
+
+  const isOrgUser = userContext?.isOrganizationUser
+  const isPlatformAdmin = userContext?.isPlatformAdmin
+  const isInOrgSection = pathname?.startsWith('/org')
+  const isInAdminSection = pathname?.startsWith('/admin')
 
   return (
     <header className="bg-white shadow-sm border-b">
@@ -17,24 +35,62 @@ export function Header() {
           <nav className="flex items-center space-x-4">
             {session ? (
               <>
-                <Link
-                  href="/dashboard"
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/courses"
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Courses
-                </Link>
-                <Link
-                  href="/dashboard/certificates"
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Certificates
-                </Link>
+                {/* Student Links */}
+                {!isInOrgSection && !isInAdminSection && (
+                  <>
+                    <Link
+                      href="/dashboard"
+                      className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                    >
+                      Dashboard
+                    </Link>
+                    <Link
+                      href="/courses"
+                      className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                    >
+                      Browse Courses
+                    </Link>
+                    <Link
+                      href="/dashboard/certificates"
+                      className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                    >
+                      My Certificates
+                    </Link>
+                  </>
+                )}
+
+                {/* Organization/Admin Links */}
+                {(isOrgUser || isPlatformAdmin) && (
+                  <>
+                    {isInOrgSection && (
+                      <Link
+                        href="/dashboard"
+                        className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                      >
+                        Student View
+                      </Link>
+                    )}
+                    {!isInOrgSection && (
+                      <Link
+                        href="/org"
+                        className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                      >
+                        Organization
+                      </Link>
+                    )}
+                  </>
+                )}
+
+                {/* Platform Admin Link */}
+                {isPlatformAdmin && (
+                  <Link
+                    href="/admin"
+                    className="text-purple-700 hover:text-purple-800 px-3 py-2 rounded-md text-sm font-medium font-semibold"
+                  >
+                    Admin
+                  </Link>
+                )}
+
                 <button
                   onClick={() => signOut({ callbackUrl: '/' })}
                   className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
@@ -64,5 +120,3 @@ export function Header() {
     </header>
   )
 }
-
-

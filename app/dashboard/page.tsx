@@ -11,15 +11,18 @@ export default async function DashboardPage() {
     redirect('/auth/signin')
   }
 
+  // Get user's enrolled courses (student view) - from ALL organizations
   const enrollments = await prisma.enrollment.findMany({
     where: { userId: session.user.id },
     include: {
       course: {
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          aiaCourseNumber: true,
+        include: {
+          organization: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           _count: {
             select: {
               slides: true,
@@ -33,12 +36,25 @@ export default async function DashboardPage() {
     },
   })
 
+  // Group by organization for display
+  const coursesByOrg = enrollments.reduce((acc: any, enrollment: any) => {
+    const orgName = enrollment.course.organization?.name || 'No Organization'
+    if (!acc[orgName]) {
+      acc[orgName] = []
+    }
+    acc[orgName].push(enrollment)
+    return acc
+  }, {})
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">My Courses</h1>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">My Courses</h1>
+        <p className="text-gray-600">Continue your learning journey across all organizations</p>
+      </div>
 
       {enrollments.length === 0 ? (
-        <div className="text-center py-12">
+        <div className="bg-white rounded-lg shadow-md p-12 text-center">
           <p className="text-gray-500 mb-4">You haven't enrolled in any courses yet.</p>
           <Link
             href="/courses"
@@ -48,35 +64,42 @@ export default async function DashboardPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {enrollments.map((enrollment: any) => (
-            <div key={enrollment.id} className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                {enrollment.course.title}
-              </h3>
-              <p className="text-gray-600 mb-4 line-clamp-2">
-                {enrollment.course.description}
-              </p>
-              
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-sm text-gray-500">
-                  Progress: {enrollment.progressSlide} / {enrollment.course._count.slides} slides
-                </span>
-                {enrollment.completedAt && (
-                  <span className="text-sm text-green-600 font-semibold">✓ Completed</span>
-                )}
-              </div>
+        <div className="space-y-8">
+          {Object.entries(coursesByOrg).map(([orgName, orgEnrollments]: [string, any]) => (
+            <div key={orgName}>
+              <h2 className="text-xl font-semibold text-gray-700 mb-4">{orgName}</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {orgEnrollments.map((enrollment: any) => (
+                  <div key={enrollment.id} className="bg-white rounded-lg shadow-md p-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      {enrollment.course.title}
+                    </h3>
+                    <p className="text-gray-600 mb-4 line-clamp-2">
+                      {enrollment.course.description}
+                    </p>
+                    
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm text-gray-500">
+                        Progress: {enrollment.progressSlide} / {enrollment.course._count.slides} slides
+                      </span>
+                      {enrollment.completedAt && (
+                        <span className="text-sm text-green-600 font-semibold">✓ Completed</span>
+                      )}
+                    </div>
 
-              <Link
-                href={
-                  enrollment.completedAt
-                    ? `/courses/${enrollment.course.id}`
-                    : `/courses/${enrollment.course.id}/slide/${enrollment.progressSlide + 1}`
-                }
-                className="block w-full text-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-              >
-                {enrollment.completedAt ? 'View Course' : 'Continue'}
-              </Link>
+                    <Link
+                      href={
+                        enrollment.completedAt
+                          ? `/courses/${enrollment.course.id}`
+                          : `/courses/${enrollment.course.id}/slide/${enrollment.progressSlide + 1}`
+                      }
+                      className="block w-full text-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                    >
+                      {enrollment.completedAt ? 'View Course' : 'Continue'}
+                    </Link>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>

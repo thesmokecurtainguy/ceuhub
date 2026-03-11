@@ -63,7 +63,7 @@ export default async function QuizPage({
       <QuizContainer
         courseId={id}
         enrollmentId={enrollment.id}
-        questions={course.questions}
+        questions={course.questions as any}
       />
     </div>
   )

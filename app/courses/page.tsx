@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/db'
 import { CourseCard } from '@/components/courses/CourseCard'
-import { Course } from '@/types'
 
 export default async function CoursesPage() {
   const courses = await prisma.course.findMany({
@@ -16,6 +15,7 @@ export default async function CoursesPage() {
         select: {
           slides: true,
           enrollments: true,
+          questions: true,
         },
       },
     },
@@ -34,8 +34,8 @@ export default async function CoursesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {courses.map((course: Course) => (
-            <CourseCard key={course.id} course={course} />
+          {courses.map((course) => (
+            <CourseCard key={course.id} course={course as any} />
           ))}
         </div>
       )}
